@@ -1,0 +1,61 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: clone-build-push
+spec:
+  description: |
+    This pipeline clones a git repo, builds a container image and
+    pushes it to a registry    
+  params:
+  - name: repo-url
+    type: string
+  - name: image-reference
+    type: string
+  - name: deployment-name
+    type: string
+  workspaces:
+  - name: shared-data
+  tasks:
+  - name: fetch-source
+    taskRef:
+      name: git-clone
+    workspaces:
+    - name: output
+      workspace: shared-data
+    params:
+    - name: url
+      value: $(params.repo-url)
+  - name: build-push
+    runAfter: ["fetch-source"]
+    taskRef:
+      name: buildah
+      kind: ClusterTask
+    workspaces:
+    - name: source
+      workspace: shared-data
+    params:
+    - name: IMAGE
+      value: $(params.image-reference)
+    # since pushing to internal registry we skip TLS verify
+    - name: TLSVERIFY
+      value: 'false'
+  - name: deploy-app
+    runAfter: ["build-push"]
+    taskRef:
+      name: openshift-client
+    params:
+    - name: IMAGE
+      value: $(params.image-reference)
+    - name: DEPLOYMENT_NAME
+      value: $(params.deployment-name)
+    - name: SCRIPT
+      value: |
+        echo "-----------Showing all existing resources-----------"
+        oc delete deployment appimage || true
+        oc delete all -l deployment=appimage --force
+        sleep 10
+        echo "-----------Creating app deployment-----------"
+        oc new-app $(params.image-reference)
+        echo "-----------Displaying all the pods-----------"
+        sleep 10
+        oc get pods -l deployment=appimage

@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: clone-build-push-run
+spec:
+  pipelineRef:
+    name: clone-build-push
+  workspaces:
+  - name: shared-data
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  params:
+  - name: repo-url
+    value: https://github.com/majoferenc/ocp-test.git
+  - name: image-reference
+    value: image-registry.openshift-image-registry.svc.cluster.local:5000/tekton-pipeline-java-demo/javaapp-image:1.0
+  - name: deployment-name
+    value: javaapp-deploy
